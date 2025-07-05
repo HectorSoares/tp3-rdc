@@ -159,7 +159,7 @@ def validate_history(history):
 
         print(f"Mensagem {i+1}: {text.decode('ascii', errors='replace')}")
         print(f"Verificador: {verifier.hex()}")
-        custom_print(f"MD5 recebido: {md5_hash.hex()}")
+        print(f"MD5 recebido: {md5_hash.hex()}")
 
         if md5_hash[:2] != b'\x00\x00':
             print("❌ MD5 não começa com dois bytes zero")
@@ -206,24 +206,24 @@ def mine_chat(text):
      md5_hash = hashlib.md5(sequence).digest()
      if md5_hash[:2] == b'\x00\x00':
         print('resolveu')
-        print(f'verifier: {verifier}')
-        print(f'md5_hash: {md5_hash}')
+        print(f'verifier: {verifier.hex()}')
+        print(f'md5_hash: {md5_hash.hex()}')
         return struct.pack('!B', n) + text_bytes + verifier + md5_hash
 
-def broadcast_new_chat(chat):
- print("Dissemina um novo chat para todos os pares.")
- global peers
- with lock:
+def broadcast_new_chat(chats):
+    global peers
+    print(f"Dissemina chats para todos os pares. Peers: {peers}")
+    with lock:
         for peer in peers:
             try:
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 sock.connect((peer, PORT))
                 
                 response = struct.pack('!B', ARCHIVE_RESPONSE)
-                response += struct.pack('!I', len(chat))  # Apenas 1 chat sendo enviado
-                for c in chat:
-                    response += c
-                print(response)
+                response += struct.pack('!I', len(chats))
+                for chat in chats:
+                    response += chat
+                print(f'Enviado: {response}')
                 sock.sendall(response)
 
                 sock.close()
@@ -295,12 +295,12 @@ def main():
         command = input("Digite 'enviar' para enviar um chat ou 'sair' para sair: ").strip().lower()
         print(f'comando enviado: {command}')
         if command == 'enviar':
-            text = "Uai"
+            text = "Hector Soares e Guilherme Assis"
             new_chat = mine_chat(text)
             with lock:
                 chat_history.append(new_chat)
-                print(f'newChat: {chat_history}')
-            broadcast_new_chat(new_chat)
+                updated_history = list(chat_history)  # cópia para evitar concorrência
+            broadcast_new_chat(updated_history)
         elif command == 'historico':
             with lock:
                 print("📜 Histórico atual:")
@@ -316,7 +316,9 @@ def exibe_historico(chat, i):
     try:
         n = chat[0]
         text = chat[1:1 + n].decode('utf-8', errors='replace')
-        print(f"{i}. {text}")
+        verifier = chat[1 + n:1 + n + 16]
+        hash_chat = chat[1 + n + 16:1 + n + 32]
+        print(f"{i}. {text}  \n {verifier.hex()}  \t {hash_chat.hex()}")
     except:
         print(f"{i}. [Erro ao decodificar mensagem]")
 
